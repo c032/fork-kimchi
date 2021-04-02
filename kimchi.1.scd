@@ -69,7 +69,8 @@ The following directives are supported:
 
 		The header fields are passed through, except _Host_ which is set to the
 		target URI's. The _Forwarded_ header is set with the original remote
-		IP address, port, host and protocol (see RFC 7239).
+		IP address, port, host and protocol (see RFC 7239), as well as the X-Forwarded-For,
+		X-Forwarded-Host and X-Forwarded-Proto headers.
 
 	*file_server* <path> { ++
 	*browse* ++

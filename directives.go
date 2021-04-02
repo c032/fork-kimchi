@@ -149,6 +149,9 @@ var backends = map[string]parseBackendFunc{
 			forwarded := fmt.Sprintf("for=%q;host=%q;proto=%q", req.RemoteAddr, req.Host, req.URL.Scheme)
 			director(req)
 			req.Header.Set("Forwarded", forwarded)
+			req.Header.Set("X-Forwarded-For", req.RemoteAddr)
+			req.Header.Set("X-Forwarded-Host", req.Host)
+			req.Header.Set("X-Forwarded-Proto", req.URL.Scheme)
 		}
 		return proxy, nil
 	},
