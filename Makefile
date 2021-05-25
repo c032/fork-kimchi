@@ -23,7 +23,7 @@ kimchi.1:
 clean:
 	$(RM) -f kimchi kimchi.1
 
-install: all
+install:
 	mkdir -p $(DESTDIR)$(BINDIR)
 	mkdir -p $(DESTDIR)$(MANDIR)/man1
 	mkdir -p $(DESTDIR)$(SYSCONFDIR)/kimchi
