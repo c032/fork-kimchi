@@ -51,6 +51,11 @@ The following directives are supported:
 	is omitted, the default HTTP port (80) is assumed. If the path is omitted,
 	requests for all paths will be handled.
 
+	If the path ends with a trailing slash, all requests begining with the path
+	will be handled.
+
+	Longer patterns take precendence over shorter ones.
+
 	URI examples:
 
 	- _:8080_ listens on port 8080
@@ -58,8 +63,10 @@ The following directives are supported:
 	  "example.org"
 	- _http+insecure://localhost_ listens on port 80 without redirecting to
 	  HTTPS
-	- _example.org/foo/_ listens on port 80 and handles requests for host
-	  "example.org" and path begining with "/foo/"
+	- _example.org/foo_ listens on port 80 and handles requests for host
+	  "example.org" and exact path "/foo" (e.g. "/foo/asdf" doesn't match)
+	- _example.org/bar/_ listens on port 80 and handles requests for host
+	  "example.org" and path begining with "/bar/" (e.g. "/bar/asdf" matches)
 	- _http://_ listens on port 80
 
 	The site directive supports the following sub-directives:
