@@ -1,0 +1,16 @@
+[Unit]
+Description=kimchi
+Documentation=man:kimchi(1)
+After=network.target
+
+[Service]
+User=http
+Group=http
+ExecStart=/usr/bin/kimchi -config /etc/kimchi/config
+TimeoutStopSec=5s
+PrivateTmp=true
+ProtectSystem=full
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target
