@@ -29,8 +29,8 @@ blocks delimited by "{" and "}". Lines beginning with "#" are comments.
 Example:
 
 ```
-frontend example.org:443 {
-    backend localhost:8080
+site example.org {
+	file_server /srv/http
 }
 ```
 
