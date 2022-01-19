@@ -66,10 +66,9 @@ func (srv *Server) AddListener(network, addr string) *Listener {
 }
 
 type Listener struct {
-	Network  string
-	Address  string
-	Mux      *http.ServeMux
-	Insecure bool
+	Network string
+	Address string
+	Mux     *http.ServeMux
 
 	h1Server   *http.Server
 	h1Listener *pipeListener
@@ -184,14 +183,16 @@ func (ln *Listener) serveConn(conn net.Conn) error {
 	}
 }
 
-func (ln *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func redirectTLS(w http.ResponseWriter, r *http.Request) bool {
 	r.TLS = contextTLSState(r.Context())
-
-	if r.TLS == nil && !ln.Insecure {
+	if r.TLS == nil {
 		http.Redirect(w, r, "https://"+r.Host+r.RequestURI, http.StatusMovedPermanently)
-		return
+		return true
 	}
+	return false
+}
 
+func (ln *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ln.Mux.ServeHTTP(w, r)
 }
 

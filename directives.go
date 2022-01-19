@@ -56,6 +56,7 @@ func parseSite(srv *Server, dir *scfg.Directive) error {
 
 		var ln *Listener
 		var host, port string
+		var insecure bool
 		switch u.Scheme {
 		case "", "http", "http+insecure":
 			if host, port, err = net.SplitHostPort(u.Host); err != nil {
@@ -64,7 +65,7 @@ func parseSite(srv *Server, dir *scfg.Directive) error {
 			}
 			ln = srv.AddListener("tcp", ":"+port)
 			if u.Scheme == "http+insecure" {
-				ln.Insecure = true
+				insecure = true
 			}
 		default:
 			return fmt.Errorf("site %q: unknown URI scheme %q", site, u.Scheme)
@@ -113,6 +114,15 @@ func parseSite(srv *Server, dir *scfg.Directive) error {
 			if err != nil {
 				return fmt.Errorf("site %q: directive %q: %v", site, child.Name, err)
 			}
+		}
+		if !insecure {
+			next := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if redirectTLS(w, r) {
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
 		}
 
 		ln.Mux.Handle(pattern, http.StripPrefix(path, handler))
