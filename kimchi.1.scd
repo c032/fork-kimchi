@@ -110,6 +110,21 @@ The following directives are supported:
 	This directive is a special case: it is evaluated before the configuration
 	is parsed, and it can appear anywhere.
 
+*access-logs* <path>
+	Write access logs to the specified file.
+
+	The file at _path_ will be either created or appended to.
+
+	The log format is the same as Nginx's NCSA virtual host combined
+	log format, with the difference that the URIs in the request line
+	are always fully specified to also include the scheme, host and port.
+
+	Log line example:
+
+	```
+	1.1.1.1:12345 - - [01/Jan/2022:01:02:03 +0400] "GET http://example.com:80/cats.html HTTP/1.1" 200 1337 "http://example.com/index.html" "mdrgpalu/1.0.0"
+	```
+
 # FILES
 
 _/etc/kimchi/config_

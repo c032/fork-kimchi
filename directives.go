@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"git.sr.ht/~emersion/go-scfg"
 )
@@ -35,6 +36,19 @@ func parseConfig(srv *Server, cfg scfg.Block) error {
 			if err := parseSite(srv, dir); err != nil {
 				return err
 			}
+		case "access-logs":
+			if len(dir.Params) != 1 {
+				return fmt.Errorf("invalid directive: need exactly one parameter: %v", dir.Name)
+			}
+			if srv.accessLogs != nil {
+				return fmt.Errorf("invalid directive: only one directive of this kind is allowed: %v", dir.Name)
+			}
+			f, err := os.OpenFile(dir.Params[0], os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+			if err != nil {
+				return fmt.Errorf("opening access log file: %v", err)
+			}
+			// TODO: close this when we support closing the server without exiting in the future
+			srv.accessLogs = f
 		default:
 			return fmt.Errorf("unknown directive %q", dir.Name)
 		}
@@ -125,7 +139,52 @@ func parseSite(srv *Server, dir *scfg.Directive) error {
 			})
 		}
 
-		ln.Mux.Handle(pattern, http.StripPrefix(path, handler))
+		handler = http.StripPrefix(path, handler)
+
+		if srv.accessLogs != nil {
+			next := handler
+			handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				interceptWriter := interceptRW{
+					ResponseWriter: w,
+				}
+				next.ServeHTTP(&interceptWriter, r)
+
+				now := time.Now()
+
+				scheme := "http"
+				if contextTLSState(r.Context()) != nil {
+					scheme = "https"
+				}
+				host := host
+				if h := r.Header.Get("Host"); h != "" {
+					host = h
+				}
+				referer := r.Header.Get("Referer")
+				if referer == "" {
+					referer = "-"
+				}
+				userAgent := r.Header.Get("User-Agent")
+				if userAgent == "" {
+					userAgent = "-"
+				}
+				line := fmt.Sprintf("%s - - [%s] \"%s %s://%s%s %s\" %d %d %q %q\n",
+					r.RemoteAddr,
+					now.Format("02/Jan/2006:15:04:05 -0700"),
+					r.Method,
+					scheme,
+					host,
+					r.RequestURI,
+					r.Proto,
+					interceptWriter.status,
+					interceptWriter.size,
+					referer,
+					userAgent,
+				)
+				srv.accessLogs.WriteString(line)
+			})
+		}
+
+		ln.Mux.Handle(pattern, handler)
 	}
 	return nil
 }

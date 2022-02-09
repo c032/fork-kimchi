@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/pires/go-proxyproto"
@@ -35,7 +36,8 @@ type listenerKey struct {
 }
 
 type Server struct {
-	listeners map[listenerKey]*Listener
+	accessLogs *os.File
+	listeners  map[listenerKey]*Listener
 }
 
 func NewServer() *Server {
