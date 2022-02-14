@@ -90,7 +90,11 @@ func newListener(network, addr string) *Listener {
 			return conn.(*Conn).Context(ctx)
 		},
 	}
-	ln.h2Server = &http2.Server{}
+	ln.h2Server = &http2.Server{
+		NewWriteScheduler: func() http2.WriteScheduler {
+			return http2.NewPriorityWriteScheduler(nil)
+		},
+	}
 	ln.Mux = http.NewServeMux()
 	return ln
 }
