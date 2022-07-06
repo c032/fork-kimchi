@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"syscall"
 )
 
@@ -22,11 +24,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	if err := srv.Start(); err != nil {
 		log.Fatal(err)
 	}
 
-	select {}
+	<-sigCh
+	log.Print("stopping server")
+	srv.Stop()
 }
 
 func bumpOpenedFileLimit() error {

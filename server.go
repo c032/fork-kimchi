@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -56,6 +57,12 @@ func (srv *Server) Start() error {
 	return nil
 }
 
+func (srv *Server) Stop() {
+	for _, ln := range srv.listeners {
+		ln.Stop()
+	}
+}
+
 func (srv *Server) AddListener(network, addr string) *Listener {
 	k := listenerKey{network, addr}
 	if ln, ok := srv.listeners[k]; ok {
@@ -71,6 +78,9 @@ type Listener struct {
 	Network string
 	Address string
 	Mux     *http.ServeMux
+
+	net           net.Listener
+	connWaitGroup sync.WaitGroup
 
 	h1Server   *http.Server
 	h1Listener *pipeListener
@@ -95,25 +105,31 @@ func newListener(network, addr string) *Listener {
 			return http2.NewPriorityWriteScheduler(nil)
 		},
 	}
+	// ConfigureServer wires up HTTP/2 graceful connection shutdown to
+	// h1Server.Shutdown
+	if err := http2.ConfigureServer(ln.h1Server, ln.h2Server); err != nil {
+		panic(fmt.Errorf("http2.ConfigureServer: %v", err))
+	}
 	ln.Mux = http.NewServeMux()
 	return ln
 }
 
 func (ln *Listener) Start() error {
-	netLn, err := net.Listen(ln.Network, ln.Address)
+	var err error
+	ln.net, err = net.Listen(ln.Network, ln.Address)
 	if err != nil {
 		return err
 	}
 	log.Printf("HTTP server listening on %q", ln.Address)
 
 	go func() {
-		if err := ln.serve(netLn); err != nil {
+		if err := ln.serve(); err != nil {
 			log.Fatalf("failed to serve listener %q: %v", ln.Address, err)
 		}
 	}()
 
 	go func() {
-		if err := ln.h1Server.Serve(ln.h1Listener); err != nil {
+		if err := ln.h1Server.Serve(ln.h1Listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("HTTP/1 server: %v", err)
 		}
 	}()
@@ -121,10 +137,26 @@ func (ln *Listener) Start() error {
 	return nil
 }
 
-func (ln *Listener) serve(netLn net.Listener) error {
+func (ln *Listener) Stop() {
+	if err := ln.net.Close(); err != nil {
+		log.Printf("failed to close listener %q: %v", ln.Address, err)
+	}
+
+	// This also shuts down the HTTP/2 server
+	if err := ln.h1Server.Shutdown(context.Background()); err != nil {
+		log.Printf("failed to shutdown HTTP/1 server: %v", err)
+	}
+
+	// TODO: gracefully shutdown hijacked connections (e.g. WebSocket)
+	// TODO: wait for HTTP/2 connections to be closed
+}
+
+func (ln *Listener) serve() error {
 	for {
-		conn, err := netLn.Accept()
-		if err != nil {
+		conn, err := ln.net.Accept()
+		if errors.Is(err, net.ErrClosed) {
+			return nil
+		} else if err != nil {
 			return fmt.Errorf("failed to accept connection: %v", err)
 		}
 
