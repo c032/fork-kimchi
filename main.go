@@ -25,15 +25,33 @@ func main() {
 	}
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	if err := srv.Start(); err != nil {
 		log.Fatal(err)
 	}
 
-	<-sigCh
-	log.Print("stopping server")
-	srv.Stop()
+	for sig := range sigCh {
+		switch sig {
+		case syscall.SIGINT, syscall.SIGTERM:
+			log.Print("stopping server")
+			srv.Stop()
+			return
+		case syscall.SIGHUP:
+			log.Print("reloading config")
+			newSrv := NewServer()
+			if err := loadConfig(newSrv, configPath); err != nil {
+				log.Printf("reload failed: %v", err)
+				continue
+			}
+			if err := newSrv.Replace(srv); err != nil {
+				log.Printf("reload failed: %v", err)
+				continue
+			}
+			srv = newSrv
+			log.Print("config reloaded")
+		}
+	}
 }
 
 func bumpOpenedFileLimit() error {

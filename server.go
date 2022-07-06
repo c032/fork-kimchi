@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pires/go-proxyproto"
 	"github.com/pires/go-proxyproto/tlvparse"
@@ -63,6 +64,36 @@ func (srv *Server) Stop() {
 	}
 }
 
+func (srv *Server) Replace(old *Server) error {
+	// Start new listeners
+	for k, ln := range srv.listeners {
+		if _, ok := old.listeners[k]; ok {
+			continue
+		}
+		if err := ln.Start(); err != nil {
+			return err
+		}
+	}
+
+	// Take over existing listeners and terminate old ones
+	for k, oldLn := range old.listeners {
+		if ln, ok := srv.listeners[k]; ok {
+			oldLn.UpdateFrom(ln)
+			srv.listeners[k] = oldLn
+		} else {
+			oldLn.Stop()
+		}
+	}
+
+	if old.accessLogs != nil {
+		if err := old.accessLogs.Close(); err != nil {
+			log.Printf("failed to close access logs file: %v", err)
+		}
+	}
+
+	return nil
+}
+
 func (srv *Server) AddListener(network, addr string) *Listener {
 	k := listenerKey{network, addr}
 	if ln, ok := srv.listeners[k]; ok {
@@ -77,7 +108,7 @@ func (srv *Server) AddListener(network, addr string) *Listener {
 type Listener struct {
 	Network string
 	Address string
-	Mux     *http.ServeMux
+	mux     atomic.Value // *http.ServeMux
 
 	net           net.Listener
 	connWaitGroup sync.WaitGroup
@@ -110,8 +141,12 @@ func newListener(network, addr string) *Listener {
 	if err := http2.ConfigureServer(ln.h1Server, ln.h2Server); err != nil {
 		panic(fmt.Errorf("http2.ConfigureServer: %v", err))
 	}
-	ln.Mux = http.NewServeMux()
+	ln.mux.Store(http.NewServeMux())
 	return ln
+}
+
+func (ln *Listener) Mux() *http.ServeMux {
+	return ln.mux.Load().(*http.ServeMux)
 }
 
 func (ln *Listener) Start() error {
@@ -149,6 +184,10 @@ func (ln *Listener) Stop() {
 
 	// TODO: gracefully shutdown hijacked connections (e.g. WebSocket)
 	// TODO: wait for HTTP/2 connections to be closed
+}
+
+func (ln *Listener) UpdateFrom(new *Listener) {
+	ln.mux.Store(new.Mux())
 }
 
 func (ln *Listener) serve() error {
@@ -231,7 +270,7 @@ func redirectTLS(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func (ln *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ln.Mux.ServeHTTP(w, r)
+	ln.Mux().ServeHTTP(w, r)
 }
 
 func parseSSLTLV(tlv proxyproto.TLV) *tls.ConnectionState {

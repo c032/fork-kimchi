@@ -184,7 +184,7 @@ func parseSite(srv *Server, dir *scfg.Directive) error {
 			})
 		}
 
-		ln.Mux.Handle(pattern, handler)
+		ln.Mux().Handle(pattern, handler)
 	}
 	return nil
 }

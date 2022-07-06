@@ -26,6 +26,8 @@ The config file has one directive per line. Directives have a name, followed
 by parameters separated by space characters. Directives may have children in
 blocks delimited by "{" and "}". Lines beginning with "#" are comments.
 
+kimchi will reload the config file when it receives the HUP signal.
+
 Example:
 
 ```
