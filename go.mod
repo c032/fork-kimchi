@@ -1,6 +1,6 @@
 module git.sr.ht/~emersion/kimchi
 
-go 1.15
+go 1.16
 
 require (
 	git.sr.ht/~emersion/go-scfg v0.0.0-20201019143924-142a8aa629fc

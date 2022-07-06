@@ -233,8 +233,6 @@ func (c *Conn) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-var errPipeListenerClosed = fmt.Errorf("pipe listener closed")
-
 // pipeListener is a hack to workaround the lack of http.Server.ServeConn.
 // See: https://github.com/golang/go/issues/36673
 type pipeListener struct {
@@ -252,7 +250,7 @@ func newPipeListener() *pipeListener {
 func (ln *pipeListener) Accept() (net.Conn, error) {
 	conn, ok := <-ln.ch
 	if !ok {
-		return nil, errPipeListenerClosed
+		return nil, net.ErrClosed
 	}
 	return conn, nil
 }
@@ -262,7 +260,7 @@ func (ln *pipeListener) Close() error {
 	defer ln.mu.Unlock()
 
 	if ln.closed {
-		return errPipeListenerClosed
+		return net.ErrClosed
 	}
 	ln.closed = true
 	close(ln.ch)
@@ -274,7 +272,7 @@ func (ln *pipeListener) ServeConn(conn net.Conn) error {
 	defer ln.mu.Unlock()
 
 	if ln.closed {
-		return errPipeListenerClosed
+		return net.ErrClosed
 	}
 	ln.ch <- conn
 	return nil
