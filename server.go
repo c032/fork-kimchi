@@ -62,6 +62,12 @@ func (srv *Server) Stop() {
 	for _, ln := range srv.listeners {
 		ln.Stop()
 	}
+
+	if srv.accessLogs != nil {
+		if err := srv.accessLogs.Close(); err != nil {
+			log.Printf("failed to close access logs file: %v", err)
+		}
+	}
 }
 
 func (srv *Server) Replace(old *Server) error {
