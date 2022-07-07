@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pires/go-proxyproto"
 	"github.com/pires/go-proxyproto/tlvparse"
@@ -197,13 +198,27 @@ func (ln *Listener) UpdateFrom(new *Listener) {
 }
 
 func (ln *Listener) serve() error {
+	var delay time.Duration
 	for {
 		conn, err := ln.net.Accept()
-		if errors.Is(err, net.ErrClosed) {
+		if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if delay == 0 {
+				delay = 5 * time.Millisecond
+			} else {
+				delay *= 2
+			}
+			if max := 1 * time.Second; delay > max {
+				delay = max
+			}
+			log.Printf("listener %q: accept error (retrying in %v): %v", ln.Address, delay, err)
+			time.Sleep(delay)
+		} else if errors.Is(err, net.ErrClosed) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("failed to accept connection: %v", err)
 		}
+
+		delay = 0
 
 		go func() {
 			if err := ln.serveConn(conn); err != nil {
