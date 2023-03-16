@@ -215,9 +215,16 @@ var backends = map[string]parseBackendFunc{
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		director := proxy.Director
 		proxy.Director = func(req *http.Request) {
-			forwarded := fmt.Sprintf("for=%q;host=%q;proto=%q", req.RemoteAddr, req.Host, req.URL.Scheme)
+			proto := "http"
+			if contextTLSState(req.Context()) != nil {
+				proto = "https"
+			}
+
+			forwarded := fmt.Sprintf("for=%q;host=%q;proto=%q", req.RemoteAddr, req.Host, proto)
 			forwardedForHost, _, _ := net.SplitHostPort(req.RemoteAddr)
+
 			director(req)
+
 			// Override reverse proxy header fields: the incoming request's
 			// header is not trusted
 			req.Header.Set("Forwarded", forwarded)
@@ -227,7 +234,7 @@ var backends = map[string]parseBackendFunc{
 				req.Header.Del("X-Forwarded-For")
 			}
 			req.Header.Set("X-Forwarded-Host", req.Host)
-			req.Header.Set("X-Forwarded-Proto", req.URL.Scheme)
+			req.Header.Set("X-Forwarded-Proto", proto)
 		}
 		return proxy, nil
 	},
