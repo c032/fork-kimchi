@@ -4,7 +4,7 @@ A bare-bones HTTP server. Designed to be used together with [tlstunnel].
 
 ```
 site example.org {
-	root /srv/http
+	file_server /srv/http
 }
 
 site example.com {
