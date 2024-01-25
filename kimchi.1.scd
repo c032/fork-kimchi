@@ -54,7 +54,7 @@ The following directives are supported:
 	requests for all paths will be handled.
 
 	If the path ends with a trailing slash, all requests begining with the path
-	will be handled.
+	will be handled. The path is stripped from the request URI.
 
 	Longer patterns take precendence over shorter ones.
 
