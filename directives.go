@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -212,9 +213,7 @@ var backends = map[string]parseBackendFunc{
 		if err != nil {
 			return nil, err
 		}
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		director := proxy.Director
-		proxy.Director = func(req *http.Request) {
+		director := func(req *http.Request) {
 			proto := "http"
 			if contextTLSState(req.Context()) != nil {
 				proto = "https"
@@ -223,7 +222,19 @@ var backends = map[string]parseBackendFunc{
 			forwarded := fmt.Sprintf("for=%q;host=%q;proto=%q", req.RemoteAddr, req.Host, proto)
 			forwardedForHost, _, _ := net.SplitHostPort(req.RemoteAddr)
 
-			director(req)
+			req.URL.Scheme = target.Scheme
+			req.URL.Host = target.Host
+			if strings.HasSuffix(target.Path, "/") {
+				p := path.Join("/", req.URL.Path)
+				req.URL.Path = strings.TrimSuffix(target.Path, "/") + p
+			} else {
+				req.URL.Path = target.Path
+			}
+			if target.RawQuery == "" || req.URL.RawQuery == "" {
+				req.URL.RawQuery = target.RawQuery + req.URL.RawQuery
+			} else {
+				req.URL.RawQuery = target.RawQuery + "&" + req.URL.RawQuery
+			}
 
 			// Override reverse proxy header fields: the incoming request's
 			// header is not trusted
@@ -236,7 +247,7 @@ var backends = map[string]parseBackendFunc{
 			req.Header.Set("X-Forwarded-Host", req.Host)
 			req.Header.Set("X-Forwarded-Proto", proto)
 		}
-		return proxy, nil
+		return &httputil.ReverseProxy{Director: director}, nil
 	},
 	"redirect": func(dir *scfg.Directive) (http.Handler, error) {
 		var to string

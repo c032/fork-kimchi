@@ -76,6 +76,9 @@ The following directives are supported:
 	*reverse_proxy* <uri>
 		Forward incoming requests to another HTTP server.
 
+		If the target URI ends with a final slash, the request's path is
+		appended. Otherwise the request's path is discarded.
+
 		The header fields are passed through, except _Host_ which is set to the
 		target URI's. The _Forwarded_ header is set with the original remote
 		IP address, port, host and protocol (see RFC 7239), as well as the X-Forwarded-For,
