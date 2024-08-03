@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pires/go-proxyproto"
 	"github.com/pires/go-proxyproto/tlvparse"
 	"golang.org/x/net/http2"
@@ -23,6 +25,13 @@ type contextKey string
 const (
 	contextKeyProtocol contextKey = "protocol"
 	contextKeyTLSState contextKey = "tlsState"
+)
+
+const (
+	httpDefaultReadTimeout    = 5 * time.Second
+	httpDefaultWriteTimeout   = 5 * time.Second
+	httpDefaultIdleTimeout    = 15 * time.Second
+	httpDefaultMaxHeaderBytes = 16 * 1024
 )
 
 func contextProtocol(ctx context.Context) string {
@@ -131,14 +140,42 @@ func newListener(network, addr string) *Listener {
 		Network: network,
 		Address: addr,
 	}
+
+	chiRouter := chi.NewRouter()
+	chiRouter.Use(middleware.RealIP)
+	chiRouter.Use(middleware.Heartbeat("/ping"))
+	chiRouter.Use(middleware.Compress(5))
+
+	chiRouter.Use(middleware.SetHeader("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'self'; script-src 'self'"))
+	chiRouter.Use(middleware.SetHeader("Cross-Origin-Embedder-Policy", "require-corp"))
+	chiRouter.Use(middleware.SetHeader("Cross-Origin-Opener-Policy", "same-origin"))
+	chiRouter.Use(middleware.SetHeader("Cross-Origin-Resource-Policy", "same-origin"))
+	chiRouter.Use(middleware.SetHeader("Referrer-Policy", "no-referrer"))
+	chiRouter.Use(middleware.SetHeader("X-Content-Type-Options", "nosniff"))
+	chiRouter.Use(middleware.SetHeader("X-Frame-Options", "sameorigin"))
+	chiRouter.Use(middleware.SetHeader("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet, notranslate, noimageindex"))
+	chiRouter.Use(middleware.SetHeader("X-Xss-Protection", "1; mode=block"))
+
+	chiRouter.Get("/robots.txt", func(w http.ResponseWriter, req *http.Request) {
+		http.ServeFileFS(w, req, staticFS, "static/robots.txt")
+	})
+
+	chiRouter.Mount("/", ln)
+
 	ln.h1Listener = newPipeListener()
 	ln.h1Server = &http.Server{
-		Handler: ln,
+		Handler:           chiRouter,
+		ReadTimeout:       httpDefaultReadTimeout,
+		ReadHeaderTimeout: httpDefaultReadTimeout,
+		WriteTimeout:      httpDefaultWriteTimeout,
+		IdleTimeout:       httpDefaultIdleTimeout,
+		MaxHeaderBytes:    httpDefaultMaxHeaderBytes,
 		ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
 			return conn.(*Conn).Context(ctx)
 		},
 	}
 	ln.h2Server = &http2.Server{
+		IdleTimeout: httpDefaultIdleTimeout,
 		NewWriteScheduler: func() http2.WriteScheduler {
 			return http2.NewPriorityWriteScheduler(nil)
 		},
