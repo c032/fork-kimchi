@@ -1,0 +1,19 @@
+name: "push"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  check:
+    uses: "./.github/workflows/check.yml"
+
+  publish:
+    uses: "./.github/workflows/publish.yml"
+    needs:
+      - "check"
+    permissions:
+      contents: "read"
+      packages: "write"
