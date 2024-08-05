@@ -226,6 +226,9 @@ var backends = map[string]parseBackendFunc{
 			req.URL.Host = target.Host
 			if strings.HasSuffix(target.Path, "/") {
 				p := path.Join("/", req.URL.Path)
+				if strings.HasSuffix(req.URL.Path, "/") && !strings.HasSuffix(p, "/") {
+					p += "/"
+				}
 				req.URL.Path = strings.TrimSuffix(target.Path, "/") + p
 			} else {
 				req.URL.Path = target.Path
